@@ -1,8 +1,6 @@
 #include "vulkanUtils.h"
 #include <assert.h>
 #include <iostream>
-#include <vector>
-#include <vulkan/vulkan.h>
 
 #ifndef NDEBUG
 #include "vulkanDebugUtils.h"
@@ -46,9 +44,7 @@ void setupExtensions(VkInstanceCreateInfo *vkInstanceCreateInfo,
   }
 }
 
-void createInstance(VulkanInstanceData *vulkanInstanceData) {
-  assert(vulkanInstanceData != nullptr);
-
+void createInstance(VulkanSetupData *vulkanSetupData) {
   VkApplicationInfo vkApplicationInfo = {};
   vkApplicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
   vkApplicationInfo.pApplicationName = "Hello Triangle";
@@ -61,8 +57,8 @@ void createInstance(VulkanInstanceData *vulkanInstanceData) {
   vkInstanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
   vkInstanceCreateInfo.pApplicationInfo = &vkApplicationInfo;
 
-  if (!vulkanInstanceData->extensions.empty()) {
-    setupExtensions(&vkInstanceCreateInfo, vulkanInstanceData->extensions);
+  if (!vulkanSetupData->extensions.empty()) {
+    setupExtensions(&vkInstanceCreateInfo, vulkanSetupData->extensions);
   }
 
 #ifndef NDEBUG
@@ -71,23 +67,76 @@ void createInstance(VulkanInstanceData *vulkanInstanceData) {
 
   vkInstanceCreateInfo.pNext =
       (VkDebugUtilsMessengerCreateInfoEXT *)&defaultVkDebugUtilsMessengerCreateInfoEXT();
-  if (vkCreateInstance(&vkInstanceCreateInfo, nullptr, &vulkanInstanceData->vkInstance) != VK_SUCCESS)
+  if (vkCreateInstance(&vkInstanceCreateInfo, nullptr, &vulkanSetupData->vkInstance) != VK_SUCCESS)
     throw std::runtime_error("Failed to create VkInstance");
 }
-} // namespace
 
-void initVulkan(VulkanInstanceData *vulkanInstanceData) {
-  createInstance(vulkanInstanceData);
+QueueFamilyIndices findQueueFamilies(VkPhysicalDevice physicalDevice) {
+  QueueFamilyIndices queueFamilyIndices;
 
-#ifndef NDEBUG
-  setupDebugMessenger(&vulkanInstanceData->vkInstance);
-#endif
+  uint32_t queueFamilyCount = 0;
+  vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
+  std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+  vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
+
+  for (size_t i = 0; i < queueFamilies.size(); ++i) {
+    if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+      queueFamilyIndices.graphicsFamily = uint32_t(i);
+      break;
+    }
+  }
+
+  return queueFamilyIndices;
 }
 
-void cleanupVulkan(VulkanInstanceData *vulkanInstanceData) {
+bool isPhysicalDeviceSuitable(VkPhysicalDevice physicalDevice) {
+  const auto queueFamilyIndices = findQueueFamilies(physicalDevice);
+  return queueFamilyIndices.graphicsFamily.has_value();
+}
+
+void pickPhysicalDevice(VulkanSetupData *vulkanSetupData) {
+  uint32_t physicalDeviceCount = 0;
+  vkEnumeratePhysicalDevices(vulkanSetupData->vkInstance, &physicalDeviceCount, nullptr);
+
+  if (physicalDeviceCount == 0) {
+    throw std::runtime_error("Failed to find GPUs with Vulkan support!");
+  }
+
+  std::vector<VkPhysicalDevice> physicalDevices(physicalDeviceCount);
+  vkEnumeratePhysicalDevices(vulkanSetupData->vkInstance, &physicalDeviceCount, physicalDevices.data());
+
+  for (const auto &physicalDevice : physicalDevices) {
+    if (isPhysicalDeviceSuitable(physicalDevice)) {
+      vulkanSetupData->vkPhysicalDevice = physicalDevice;
+      break;
+    }
+  }
+
+  if (vulkanSetupData->vkPhysicalDevice == VK_NULL_HANDLE) {
+    throw std::runtime_error("Failed to find a suitable GPU!");
+  }
+}
+
+} // namespace
+
+void initVulkan(VulkanSetupData *vulkanSetupData) {
+  assert(vulkanSetupData != nullptr);
+
+  createInstance(vulkanSetupData);
+
 #ifndef NDEBUG
-  cleanupDebugMessenger(&vulkanInstanceData->vkInstance);
+  setupDebugMessenger(&vulkanSetupData->vkInstance);
 #endif
 
-  vkDestroyInstance(vulkanInstanceData->vkInstance, nullptr);
+  pickPhysicalDevice(vulkanSetupData);
+}
+
+void cleanupVulkan(VulkanSetupData *vulkanSetupData) {
+  assert(vulkanSetupData != nullptr);
+
+#ifndef NDEBUG
+  cleanupDebugMessenger(&vulkanSetupData->vkInstance);
+#endif
+
+  vkDestroyInstance(vulkanSetupData->vkInstance, nullptr);
 }

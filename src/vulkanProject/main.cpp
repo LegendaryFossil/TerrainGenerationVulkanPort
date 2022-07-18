@@ -10,7 +10,7 @@
 #endif
 
 WindowData windowData = {};
-VulkanInstanceData vulkanInstanceData = {};
+VulkanSetupData vulkanSetupData = {};
 
 static std::vector<const char *> getRequiredExtensions() {
   uint32_t glfwExtensionCount = 0;
@@ -48,7 +48,7 @@ void mainLoop() {
 }
 
 void cleanup() {
-  cleanupVulkan(&vulkanInstanceData);
+  cleanupVulkan(&vulkanSetupData);
   glfwDestroyWindow(windowData.window.get());
   glfwTerminate();
 }
@@ -56,9 +56,9 @@ void cleanup() {
 void runApplication() {
   initWindow();
 
-  vulkanInstanceData.extensions = getRequiredExtensions();
+  vulkanSetupData.extensions = getRequiredExtensions();
 
-  initVulkan(&vulkanInstanceData);
+  initVulkan(&vulkanSetupData);
 
   mainLoop();
   cleanup();
