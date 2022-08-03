@@ -5,6 +5,6 @@
 
 VkDebugUtilsMessengerCreateInfoEXT defaultVkDebugUtilsMessengerCreateInfoEXT();
 void setupValidationLayers(VkInstanceCreateInfo *vkInstanceCreateInfo);
-void setupDebugMessenger(VkInstance *vkInstance);
-void cleanupDebugMessenger(VkInstance *vkInstance);
+void setupDebugMessenger(VkInstance *instance);
+void cleanupDebugMessenger(VkInstance *instance);
 std::vector<const char *> getDebugExtensions();

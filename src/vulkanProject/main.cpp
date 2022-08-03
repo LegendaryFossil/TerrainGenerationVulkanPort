@@ -57,8 +57,7 @@ void runApplication() {
   initWindow();
 
   vulkanSetupData.extensions = getRequiredExtensions();
-
-  initVulkan(&vulkanSetupData);
+  initVulkan(&vulkanSetupData, windowData.window.get());
 
   mainLoop();
   cleanup();

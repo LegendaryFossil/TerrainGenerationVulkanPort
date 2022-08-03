@@ -1,5 +1,8 @@
 #include "vulkanUtils.h"
-#include <assert.h>
+
+#include "vulkanDevice.h"
+#include "vulkanSwapChain.h"
+#include "windowDefs.h"
 #include <iostream>
 
 #ifndef NDEBUG
@@ -44,6 +47,13 @@ void setupExtensions(VkInstanceCreateInfo *vkInstanceCreateInfo,
   }
 }
 
+void createSurface(VulkanSetupData *vulkanSetupData, GLFWwindow *window) {
+  if (glfwCreateWindowSurface(vulkanSetupData->instance, window, nullptr, &vulkanSetupData->surface) !=
+      VK_SUCCESS) {
+    throw std::runtime_error("Failed to create window surface!");
+  }
+}
+
 void createInstance(VulkanSetupData *vulkanSetupData) {
   VkApplicationInfo vkApplicationInfo = {};
   vkApplicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -67,11 +77,41 @@ void createInstance(VulkanSetupData *vulkanSetupData) {
 
   vkInstanceCreateInfo.pNext =
       (VkDebugUtilsMessengerCreateInfoEXT *)&defaultVkDebugUtilsMessengerCreateInfoEXT();
-  if (vkCreateInstance(&vkInstanceCreateInfo, nullptr, &vulkanSetupData->vkInstance) != VK_SUCCESS)
+  if (vkCreateInstance(&vkInstanceCreateInfo, nullptr, &vulkanSetupData->instance) != VK_SUCCESS)
     throw std::runtime_error("Failed to create VkInstance");
 }
 
-QueueFamilyIndices findQueueFamilies(VkPhysicalDevice physicalDevice) {
+void createGraphicsPipeline() {
+
+}
+
+} // namespace
+
+SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device, const VkSurfaceKHR surface) {
+  SwapChainSupportDetails swapChainSupportDetails = {};
+
+  vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &swapChainSupportDetails.surfaceCapabilities);
+
+  uint32_t formatCount;
+  vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
+  if (formatCount != 0) {
+    swapChainSupportDetails.surfaceFormats.resize(formatCount);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount,
+                                         swapChainSupportDetails.surfaceFormats.data());
+  }
+
+  uint32_t presentModeCount;
+  vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
+  if (presentModeCount != 0) {
+    swapChainSupportDetails.presentModes.resize(presentModeCount);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount,
+                                              swapChainSupportDetails.presentModes.data());
+  }
+
+  return swapChainSupportDetails;
+}
+
+QueueFamilyIndices findQueueFamilies(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface) {
   QueueFamilyIndices queueFamilyIndices;
 
   uint32_t queueFamilyCount = 0;
@@ -82,6 +122,16 @@ QueueFamilyIndices findQueueFamilies(VkPhysicalDevice physicalDevice) {
   for (size_t i = 0; i < queueFamilies.size(); ++i) {
     if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
       queueFamilyIndices.graphicsFamily = uint32_t(i);
+    }
+
+    VkBool32 presentSupport = false;
+    vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, uint32_t(i), surface, &presentSupport);
+
+    if (presentSupport) {
+      queueFamilyIndices.presentFamily = uint32_t(i);
+    }
+
+    if (queueFamilyIndices.graphicsFamily.has_value() && queueFamilyIndices.presentFamily.has_value()) {
       break;
     }
   }
@@ -89,54 +139,32 @@ QueueFamilyIndices findQueueFamilies(VkPhysicalDevice physicalDevice) {
   return queueFamilyIndices;
 }
 
-bool isPhysicalDeviceSuitable(VkPhysicalDevice physicalDevice) {
-  const auto queueFamilyIndices = findQueueFamilies(physicalDevice);
-  return queueFamilyIndices.graphicsFamily.has_value();
-}
-
-void pickPhysicalDevice(VulkanSetupData *vulkanSetupData) {
-  uint32_t physicalDeviceCount = 0;
-  vkEnumeratePhysicalDevices(vulkanSetupData->vkInstance, &physicalDeviceCount, nullptr);
-
-  if (physicalDeviceCount == 0) {
-    throw std::runtime_error("Failed to find GPUs with Vulkan support!");
-  }
-
-  std::vector<VkPhysicalDevice> physicalDevices(physicalDeviceCount);
-  vkEnumeratePhysicalDevices(vulkanSetupData->vkInstance, &physicalDeviceCount, physicalDevices.data());
-
-  for (const auto &physicalDevice : physicalDevices) {
-    if (isPhysicalDeviceSuitable(physicalDevice)) {
-      vulkanSetupData->vkPhysicalDevice = physicalDevice;
-      break;
-    }
-  }
-
-  if (vulkanSetupData->vkPhysicalDevice == VK_NULL_HANDLE) {
-    throw std::runtime_error("Failed to find a suitable GPU!");
-  }
-}
-
-} // namespace
-
-void initVulkan(VulkanSetupData *vulkanSetupData) {
+void initVulkan(VulkanSetupData *vulkanSetupData, GLFWwindow *window) {
   assert(vulkanSetupData != nullptr);
 
   createInstance(vulkanSetupData);
-
 #ifndef NDEBUG
-  setupDebugMessenger(&vulkanSetupData->vkInstance);
+  setupDebugMessenger(&vulkanSetupData->instance);
 #endif
-
+  createSurface(vulkanSetupData, window);
   pickPhysicalDevice(vulkanSetupData);
+  createLogicalDevice(vulkanSetupData);
+  createSwapChain(vulkanSetupData, window);
 }
 
 void cleanupVulkan(VulkanSetupData *vulkanSetupData) {
   assert(vulkanSetupData != nullptr);
 
 #ifndef NDEBUG
-  cleanupDebugMessenger(&vulkanSetupData->vkInstance);
+  cleanupDebugMessenger(&vulkanSetupData->instance);
 #endif
 
-  vkDestroyInstance(vulkanSetupData->vkInstance, nullptr);
+  for (auto imageView : vulkanSetupData->swapChainData.swapChainImageViews) {
+    vkDestroyImageView(vulkanSetupData->device, imageView, nullptr);
+  }
+
+  vkDestroySwapchainKHR(vulkanSetupData->device, vulkanSetupData->swapChainData.swapChain, nullptr);
+  vkDestroyDevice(vulkanSetupData->device, nullptr);
+  vkDestroySurfaceKHR(vulkanSetupData->instance, vulkanSetupData->surface, nullptr);
+  vkDestroyInstance(vulkanSetupData->instance, nullptr);
 }

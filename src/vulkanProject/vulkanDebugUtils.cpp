@@ -89,16 +89,16 @@ void setupValidationLayers(VkInstanceCreateInfo *vkInstanceCreateInfo) {
   vkInstanceCreateInfo->ppEnabledLayerNames = kValidationLayerNames.data();
 }
 
-void setupDebugMessenger(VkInstance *vkInstance) {
+void setupDebugMessenger(VkInstance *instance) {
   VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
-  if (createDebugUtilsMessengerEXT(*vkInstance, &defaultVkDebugUtilsMessengerCreateInfoEXT(), nullptr,
+  if (createDebugUtilsMessengerEXT(*instance, &defaultVkDebugUtilsMessengerCreateInfoEXT(), nullptr,
                                    &debugMessenger) != VK_SUCCESS) {
     throw std::runtime_error("failed to set up debug messenger!");
   }
 }
 
-void cleanupDebugMessenger(VkInstance *vkInstance) {
-  destroyDebugUtilsMessengerEXT(*vkInstance, debugMessenger, nullptr);
+void cleanupDebugMessenger(VkInstance *instance) {
+  destroyDebugUtilsMessengerEXT(*instance, debugMessenger, nullptr);
 }
 
 std::vector<const char *> getDebugExtensions() { return {VK_EXT_DEBUG_UTILS_EXTENSION_NAME}; }
